@@ -16,6 +16,40 @@ const security = require('../lib/insecurity')
 const challenges = require('../data/datacache').challenges
 const users = require('../data/datacache').users
 
+
+// Định nghĩa giới hạn số lần đăng nhập thất bại
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_ATTEMPT_TIMEOUT = 30 * 60 * 1000; // 30 phút
+
+// Thêm một cấu trúc dữ liệu để theo dõi các lần đăng nhập thất bại
+let loginAttempts = new Map();
+
+function isLoginAllowed(email) {
+  if (!loginAttempts.has(email)) {
+    return true;
+  }
+
+  let { attempts, lastAttempt } = loginAttempts.get(email);
+  if (Date.now() - lastAttempt > LOGIN_ATTEMPT_TIMEOUT) {
+    // Xóa dữ liệu nếu quá thời gian chờ
+    loginAttempts.delete(email);
+    return true;
+  }
+
+  return attempts < MAX_LOGIN_ATTEMPTS;
+}
+
+function recordFailedLogin(email) {
+  let attemptsData = loginAttempts.get(email);
+  if (!attemptsData) {
+    attemptsData = { attempts: 1, lastAttempt: Date.now() };
+  } else {
+    attemptsData.attempts++;
+    attemptsData.lastAttempt = Date.now();
+  }
+  loginAttempts.set(email, attemptsData);
+}
+
 // vuln-code-snippet start loginAdminChallenge loginBenderChallenge loginJimChallenge
 module.exports = function login () {
   function afterLogin (user: { data: User, bid: number }, res: Response, next: NextFunction) {
@@ -32,6 +66,10 @@ module.exports = function login () {
   }
 
   return (req: Request, res: Response, next: NextFunction) => {
+
+    if (!isLoginAllowed(req.body.email)) {
+      return res.status(429).json({ error: 'Đã vượt quá số lần đăng nhập cho phép. Vui lòng thử lại sau.' });
+    }
     verifyPreLoginChallenges(req) // vuln-code-snippet hide-line
     models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: UserModel, plain: true }) // vuln-code-snippet vuln-line loginAdminChallenge loginBenderChallenge loginJimChallenge
       .then((authenticatedUser: { data: User }) => { // vuln-code-snippet neutral-line loginAdminChallenge loginBenderChallenge loginJimChallenge
@@ -53,6 +91,7 @@ module.exports = function login () {
           res.status(401).send(res.__('Invalid email or password.'))
         }
       }).catch((error: Error) => {
+        recordFailedLogin(req.body.email);
         next(error)
       })
   }
