@@ -18,39 +18,47 @@ interface RequestWithRawBody extends Request {
 
 module.exports.addBasketItem = function addBasketItem () {
   return (req: RequestWithRawBody, res: Response, next: NextFunction) => {
-    const result = utils.parseJsonCustom(req.rawBody)
-    const productIds = []
-    const basketIds = []
-    const quantities = []
+    const result = utils.parseJsonCustom(req.rawBody);
+    const user = security.authenticatedUsers.from(req);
 
+    // Duyệt qua kết quả để tìm và xác thực các giá trị
+    let productId, basketId, quantity;
     for (let i = 0; i < result.length; i++) {
-      if (result[i].key === 'ProductId') {
-        productIds.push(result[i].value)
-      } else if (result[i].key === 'BasketId') {
-        basketIds.push(result[i].value)
-      } else if (result[i].key === 'quantity') {
-        quantities.push(result[i].value)
+      switch(result[i].key) {
+        case 'ProductId':
+          productId = result[i].value;
+          break;
+        case 'BasketId':
+          basketId = result[i].value;
+          break;
+        case 'quantity':
+          quantity = result[i].value;
+          break;
       }
     }
 
-    const user = security.authenticatedUsers.from(req)
-    if (user && basketIds[0] && basketIds[0] !== 'undefined' && Number(user.bid) != Number(basketIds[0])) { // eslint-disable-line eqeqeq
-      res.status(401).send('{\'error\' : \'Invalid BasketId\'}')
-    } else {
-      const basketItem = {
-        ProductId: productIds[productIds.length - 1],
-        BasketId: basketIds[basketIds.length - 1],
-        quantity: quantities[quantities.length - 1]
-      }
-      challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid != basketItem.BasketId }) // eslint-disable-line eqeqeq
+    // Kiểm tra xem người dùng có đang cố gắng thêm sản phẩm vào giỏ hàng của người khác không
+    if (user && basketId && basketId !== 'undefined' && Number(user.bid) !== Number(basketId)) {
+      return res.status(401).send({'error' : 'Invalid BasketId'});
+    }
 
-      const basketItemInstance = BasketItemModel.build(basketItem)
-      basketItemInstance.save().then((addedBasketItem: BasketItemModel) => {
-        res.json({ status: 'success', data: addedBasketItem })
+    // Kiểm tra dữ liệu sản phẩm và giỏ hàng
+    if (!productId || !basketId || !quantity) {
+      return res.status(400).send({'error' : 'Missing ProductId, BasketId, or quantity'});
+    }
+
+    const basketItem = { ProductId: productId, BasketId: basketId, quantity };
+    challengeUtils.solveIf(challenges.basketManipulateChallenge, () => { 
+      return user && basketItem.BasketId && basketItem.BasketId !== 'undefined' && user.bid !== basketItem.BasketId;
+    });
+
+    const basketItemInstance = BasketItemModel.build(basketItem);
+    basketItemInstance.save()
+      .then((addedBasketItem: BasketItemModel) => {
+        res.json({ status: 'success', data: addedBasketItem });
       }).catch((error: Error) => {
-        next(error)
-      })
-    }
+        next(error);
+      });
   }
 }
 
