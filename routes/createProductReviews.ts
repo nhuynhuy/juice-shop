@@ -16,10 +16,11 @@ module.exports = function productReviews () {
   return (req: Request, res: Response) => {
     const user = security.authenticatedUsers.from(req)
     if (!user) {
-      return res.status(401).json({ status: 'error', message: 'Xác thực là bắt buộc' })
+      return res.status(401).json({ status: 'error' })
     }
 
-    // Kiểm tra nội dung review
+    else {
+      // Kiểm tra nội dung review
     const reviewContent = req.body.message
     if (!reviewContent || reviewContent.length === 0) {
       return res.status(400).json({ status: 'error', message: 'Nội dung review không được để trống' })
@@ -38,6 +39,7 @@ module.exports = function productReviews () {
       res.status(500).json(utils.getErrorMessage(err))
     })
   }
+    }
 }
 
 // Trong đoạn code trên, đã thêm:
