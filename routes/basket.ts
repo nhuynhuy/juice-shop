@@ -12,25 +12,27 @@ import * as utils from '../lib/utils'
 const security = require('../lib/insecurity')
 const challenges = require('../data/datacache').challenges
 
-module.exports = function retrieveBasket () {
+module.exports = function retrieveBasket() {
   return (req: Request, res: Response, next: NextFunction) => {
-    const id = req.params.id
+    const id = req.params.id;
+    const user = security.authenticatedUsers.from(req);
+
+    // Kiểm tra xem người dùng có đang cố gắng truy cập giỏ hàng không thuộc về họ không
+    if (!user || user.bid !== Number(id)) {
+      return res.status(403).send({'error': 'Không có quyền truy cập giỏ hàng này.'});
+    }
+
     BasketModel.findOne({ where: { id }, include: [{ model: ProductModel, paranoid: false, as: 'Products' }] })
       .then((basket: BasketModel | null) => {
-        /* jshint eqeqeq:false */
-        challengeUtils.solveIf(challenges.basketAccessChallenge, () => {
-          const user = security.authenticatedUsers.from(req)
-          return user && id && id !== 'undefined' && id !== 'null' && id !== 'NaN' && user.bid && user.bid != id // eslint-disable-line eqeqeq
-        })
         if (((basket?.Products) != null) && basket.Products.length > 0) {
           for (let i = 0; i < basket.Products.length; i++) {
-            basket.Products[i].name = req.__(basket.Products[i].name)
+            basket.Products[i].name = req.__(basket.Products[i].name);
           }
         }
-
-        res.json(utils.queryResultToJson(basket))
+        res.json(utils.queryResultToJson(basket));
       }).catch((error: Error) => {
-        next(error)
-      })
+        next(error);
+      });
   }
 }
+
