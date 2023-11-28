@@ -17,28 +17,26 @@ module.exports = function productReviews () {
     const user = security.authenticatedUsers.from(req)
     if (!user) {
       return res.status(401).json({ status: 'error' })
-    }
-
-    else {
+    } else {
       // Kiểm tra nội dung review
-    const reviewContent = req.body.message
-    if (!reviewContent || reviewContent.length === 0) {
-      return res.status(400).json({ status: 'error', message: 'Nội dung review không được để trống' })
-    }
+      const reviewContent = req.body.message
+      if (!reviewContent || reviewContent.length === 0) {
+        return res.status(400).json({ status: 'error', message: 'Nội dung review không được để trống' })
+      }
 
-    challengeUtils.solveIf(challenges.forgedReviewChallenge, () => { return user && user.data.email !== req.body.author })
-    reviews.insert({
-      product: req.params.id,
-      message: req.body.message,
-      author: user.data.email, // Sử dụng email của người dùng đã xác thực
-      likesCount: 0,
-      likedBy: []
-    }).then(() => {
-      res.status(201).json({ status: 'success' })
-    }, (err: unknown) => {
-      res.status(500).json(utils.getErrorMessage(err))
-    })
-  }
+      challengeUtils.solveIf(challenges.forgedReviewChallenge, () => { return user && user.data.email !== req.body.author })
+      reviews.insert({
+        product: req.params.id,
+        message: req.body.message,
+        author: user.data.email, // Sử dụng email của người dùng đã xác thực
+        likesCount: 0,
+        likedBy: []
+      }).then(() => {
+        res.status(201).json({ status: 'success' })
+      }, (err: unknown) => {
+        res.status(500).json(utils.getErrorMessage(err))
+      })
+    }
     }
 }
 
