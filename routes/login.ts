@@ -24,6 +24,15 @@ const LOGIN_ATTEMPT_TIMEOUT = 30 * 60 * 1000; // 30 phút
 // Thêm một cấu trúc dữ liệu để theo dõi các lần đăng nhập thất bại
 let loginAttempts = new Map();
 
+const rateLimit = require('express-rate-limit');
+
+// Tạo middleware rate limiter cho yêu cầu đăng nhập
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 phút
+  max: 5, // giới hạn mỗi IP chỉ được 5 yêu cầu đăng nhập mỗi cửa sổ 15 phút
+  message: 'Quá nhiều lần thử đăng nhập từ địa chỉ IP này. Vui lòng thử lại sau 15 phút.'
+});
+
 function isLoginAllowed(email) {
   if (!loginAttempts.has(email)) {
     return true;
@@ -66,7 +75,7 @@ module.exports = function login () {
   }
 
   return (req: Request, res: Response, next: NextFunction) => {
-
+    loginRateLimiter(req, res, next);
     if (!isLoginAllowed(req.body.email)) {
       return res.status(429).json({ error: 'Đã vượt quá số lần đăng nhập cho phép. Vui lòng thử lại sau.' });
     }
